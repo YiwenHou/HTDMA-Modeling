@@ -99,6 +99,7 @@ for subdir, dirs, files in os.walk(directory):
             N_tot_new = newdf_valid.N_tot # type: series
             N_tot_new = newdf_valid['N_tot'].to_numpy()
             N_tot_new = N_tot_new.tolist()
+            #print(N_tot_new)
             #print(type(N_tot_new))
             
             count = []
@@ -106,12 +107,12 @@ for subdir, dirs, files in os.walk(directory):
             for i in range(0,len(N_tot)):
                 ct = N_tot_new.count(N_tot[i]) # count the amount of appearance of N_tot[i] in N_tot_new
                 count = np.append(count,ct)
-                        
+            count = count.astype('int32')             
             #print(count)
             #print(type(count)) : np array
-            #print(len(count))
-            
-            print(newdf_valid.head(60))
+            #print(len(count)) : 56
+
+            #print(newdf_valid.head(60))
             
             # for each file seperately
             conc_norm = newdf_valid.conc_norm # c(k)_i
@@ -124,71 +125,59 @@ for subdir, dirs, files in os.walk(directory):
             # mixing entropy for particle at bin i
             H_i = -p_LH_i*np.log(p_LH_i)-p_MH_i*np.log(p_MH_i)
             H_i.name = "H_i"
-            newdf = newdf_valid.join(H_i)
+            newdf_valid = newdf_valid.join(H_i)
             
 
             # average mixing entropy: H_alpha
-            H_alpha_i = H_i*(conc_norm/N_tot)*dK
+            H_alpha_i = H_i*conc_norm*dK  # H_i * c(k)_i * dK
             
-            p_MH_j = p_MH_i*(conc_norm/N_tot)*dK
-            p_LH_j = p_LH_i*(conc_norm/N_tot)*dK
+            p_MH_j = p_MH_i*conc_norm*dK
+            p_LH_j = p_LH_i*conc_norm*dK
             
             # print(H_alpha_i.head(20))
             # print(H_alpha_i[18]) # [index]
             H_alpha_i.name = 'H_alpha_i'
             p_MH_j.name = 'p_MH_j'
             p_LH_j.name = 'p_LH_j'
-            newdf = newdf.join(H_alpha_i)
-            newdf = newdf.join(p_MH_j)
-            newdf = newdf.join(p_LH_j)
-            #print(newdf)
+            newdf_valid = newdf_valid.join(H_alpha_i)
+            newdf_valid = newdf_valid.join(p_MH_j)
+            newdf_valid = newdf_valid.join(p_LH_j)
+            #print(newdf_valid)
             
-            # change NaN value to 0
-            newdf['H_alpha_i'] = newdf['H_alpha_i'].fillna(0)
-            print(newdf)
-            #print(newdf.H_alpha_i.head(20))
-            
+
             # transfer from pd series to pd array
-            H_alpha_i = newdf.H_alpha_i.array 
-            p_MH_j = newdf.p_MH_j.array
-            p_LH_j = newdf.p_LH_j.array
-            kappa = newdf.kappa.array
+            H_alpha_i = newdf_valid.H_alpha_i.array 
+            p_MH_j = newdf_valid.p_MH_j.array
+            p_LH_j = newdf_valid.p_LH_j.array
+            kappa = newdf_valid.kappa.array
             
             
             x = 0
-            end = int(len(H_alpha_i)/60) # 60 in a group
-            #print(end) # 56
+            end = int(len(count))
+            #print(end) : 56
+            
             
             H_alpha = [] # empty array
             p_MH = []
             p_LH = []
             kappa_avg = []
             
-            for i in range(0,end-1): # first n-1 groups, assuming there are n groups # range(0,55)-> 0~54
-                sum_H_alpha_i = sum(H_alpha_i[range(x,x+60)])
-                sum_MH_i = sum(p_MH_j[range(x,x+60)]) 
-                sum_LH_i = sum(p_LH_j[range(x,x+60)]) 
-                k_avg = sum(kappa[range(x,x+60)])/60
+            for i in range(0,end): 
+                sum_H_alpha_i = sum(H_alpha_i[range(x,x+count[i])])
+                sum_MH_i = sum(p_MH_j[range(x,x+count[i])]) 
+                sum_LH_i = sum(p_LH_j[range(x,x+count[i])]) 
+                k_avg = sum(kappa[range(x,x+count[i])])/count[i]
                 #print(sum_MH_i)
                 H_alpha = np.append(H_alpha,sum_H_alpha_i)
                 p_MH = np.append(p_MH,sum_MH_i)
                 p_LH = np.append(p_LH,sum_LH_i)
                 kappa_avg = np.append(kappa_avg,k_avg)
-                x = x+60
+                x = x+count[i]
             #print(p_MH)
+            #print(p_LH)
             #print(len(p_LH))
-                
-            # last group (nth group)
-            sum_H_alpha_i_last = sum(H_alpha_i[-60:])
-            sum_MH_i_last = sum(p_MH_j[-60:])
-            sum_LH_i_last = sum(p_LH_j[-60:])
-            k_avg_last = sum(kappa[-60:])/60
         
-            H_alpha = np.append(H_alpha,sum_H_alpha_i_last) # for each scan, across all bins
-            p_MH = np.append(p_MH,sum_MH_i_last)
-            p_LH = np.append(p_LH,sum_LH_i_last)
-            kappa_avg = np.append(kappa_avg,k_avg_last)
-            
+           
             # bulk mixing entropy: H_gamma for each scan
             H_gamma = -p_LH*np.log(p_LH)-p_MH*np.log(p_MH)
             #print(H_alpha)
@@ -219,8 +208,4 @@ for subdir, dirs, files in os.walk(directory):
             df_Fig3 = df_Fig3.join(D_gamma)
             df_Fig3 = df_Fig3.join(chi)
             df_Fig3 = df_Fig3.join(kappa_avg)
-            #print(df_Fig3)
-            
-            #df_Fig3['D_gamma'] = df_Fig3['D_gamma'].fillna(0)
-            #df_Fig3['chi'] = df_Fig3['chi'].fillna(0)
-            #print(df_Fig3.head(50))
+            print(df_Fig3)
